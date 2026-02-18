@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="lo">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ແດຊບອດການເງິນ BCEL One</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <!-- Google Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@300;400;500;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans Lao', 'Sarabun', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .bg-bcel-red {
+            background-color: #d32f2f;
+        }
+
+        .text-bcel-red {
+            color: #d32f2f;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b3b3b3;
+        }
+
+        /* Loader */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #d32f2f;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .scanning-overlay {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(2px);
+        }
+
+        /* Modal Animation */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .modal-exit {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .modal-exit-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        /* Card Shadows - Enhanced for better visibility */
+        .card-shadow {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .card-shadow-hover {
+            transition: box-shadow 0.3s ease, transform 0.3s ease;
+        }
+
+        .card-shadow-hover:hover {
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .card-shadow-lg {
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen pb-12 text-gray-800 relative">
+
+    <!-- Global Loader -->
+    <div id="globalLoader"
+        class="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center transition-opacity duration-500">
+        <div class="loader mb-4 w-12 h-12 border-4 text-red-600"></div>
+        <p class="text-gray-600 font-medium animate-pulse">ກຳລັງໂຫຼດຂໍ້ມູນ...</p>
+        <p class="text-xs text-gray-400 mt-2">Connecting to Google Sheets</p>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-bcel-red text-white p-4 md:p-6 shadow-lg sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                    <span data-i18n="appTitle">
+                </h1>
+                <div class="flex items-center gap-2 mt-1">
+                    <p class="text-red-100 text-xs md:text-sm" data-i18n="appSubtitle">ລະບົບວິເຄາະສະລິບ BCEL One</p>
+                    <span id="syncStatusBadge"
+                        class="hidden flex items-center gap-1 text-xs bg-black/20 px-2 py-0.5 rounded-full text-green-300">
+                        <div class="w-2 h-2 rounded-full bg-green-400"></div> ເຊື່ອມຕໍ່ແລ້ວ
+                    </span>
+                </div>
+            </div>
+            <div class="flex gap-2 flex-wrap justify-center md:justify-end">
+                <!-- Lang Switcher -->
+                <div class="flex items-center gap-2 mr-2 bg-black/20 px-3 py-1 rounded-lg">
+                    <button id="btnLangLo" onclick="setLanguage('lo')" class="text-sm">LA</button>
+                    <span class="text-white/30">|</span>
+                    <button id="btnLangEn" onclick="setLanguage('en')" class="text-sm">EN</button>
+                </div>
+
+
+
+
+                <button onclick="saveDataCSV()"
+                    class="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition text-sm cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                        <polyline points="17 21 17 13 7 13 7 21" />
+                        <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                    <span class="hidden sm:inline" data-i18n="btnBackup">ສຳຮອງຂໍ້ມູນ</span>
+                </button>
+
+                <!-- Upload Slip Button -->
+                <button onclick="document.getElementById('fileInput').click()"
+                    class="flex items-center gap-2 bg-white text-red-700 px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-gray-100 transition text-sm cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <span data-i18n="btnUpload">ອັບໂຫລດສະລິບ</span>
+                </button>
+                <input type="file" id="fileInput" class="hidden" accept="image/*">
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="max-w-6xl mx-auto mt-8 px-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- Column 1: Slip View & Form -->
+        <div class="md:col-span-1 space-y-6">
+
+            <!-- Digital Slip Card -->
+            <div id="slip-card"
+                class="bg-white rounded-2xl card-shadow-lg overflow-hidden border border-gray-200 relative transition-all duration-300">
+
+                <!-- Scan Overlay -->
+                <div id="scan-overlay"
+                    class="hidden absolute inset-0 z-20 scanning-overlay flex flex-col items-center justify-center">
+                    <div class="loader mb-3"></div>
+                    <p class="text-sm font-bold text-gray-600">ກຳລັງອ່ານຂໍ້ມູນສະລິບ...</p>
+                    <p class="text-xs text-gray-400 mt-1" id="scan-status">ກຳລັງເລີ່ມລະບົບ OCR...</p>
+                </div>
+
+                <div id="slip-header"
+                    class="bg-bcel-red p-4 text-white text-center font-bold transition-colors duration-300">
+                    <span id="slip-type-title" data-i18n="slipTitleTransfer">Fund transfer sent</span>
+                </div>
+
+                <div class="p-6 relative">
+                    <!-- Slip Content -->
+                    <div class="absolute -left-3 top-1/2 w-6 h-6 bg-gray-100 rounded-full"></div>
+                    <div class="absolute -right-3 top-1/2 w-6 h-6 bg-gray-100 rounded-full"></div>
+
+                    <!-- Top Section (From / Reference) -->
+                    <div class="mb-4 pb-2 border-b border-gray-100">
+                        <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                            <span id="slip-top-label" class="bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 font-bold"
+                                data-i18n="labelFrom">ຈາກ</span>
+                            <span id="slip-top-sub" data-i18n="labelAccount">ບັນຊີ</span>
+                        </div>
+                        <p class="font-medium text-gray-700 text-sm" id="slip-top-value">-</p>
+                        <p class="text-xs text-gray-400" id="slip-datetime">-</p>
+                    </div>
+
+                    <!-- Middle Section (To / Merchant) -->
+                    <div class="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
+                        <div id="slip-icon-container"
+                            class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xl shrink-0">
+                            TR
+                        </div>
+                        <div class="overflow-hidden w-full">
+                            <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                                <span id="slip-mid-label"
+                                    class="bg-red-100 px-1.5 py-0.5 rounded text-red-600 font-bold"
+                                    data-i18n="labelTo">ໄປຫາ</span>
+                                <span id="slip-mid-sub" data-i18n="labelAccount">ບັນຊີ</span>
+                            </div>
+                            <p class="font-bold text-gray-800 text-sm truncate" id="slip-mid-title">-</p>
+                            <p class="text-xs text-gray-500" id="slip-mid-detail">-</p>
+                        </div>
+                    </div>
+
+                    <!-- Details -->
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between items-start">
+                            <span class="text-gray-500 shrink-0" id="slip-desc-label"
+                                data-i18n="labelDesc">ຄຳອະທິບາຍ</span>
+                            <span class="text-gray-800 font-medium text-right break-words max-w-[65%]"
+                                id="slip-desc-value" data-i18n="valWait">ລໍຖ້າການອັບໂຫລດ...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500" data-i18n="labelBill">ເລກທີໃບບິນ</span>
+                            <span class="text-gray-800 font-medium" id="slip-bill">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Amount -->
+                    <div class="mt-6 pt-4 border-t-2 border-dashed border-gray-200">
+                        <p class="text-gray-500 text-sm mb-1" data-i18n="labelAmount">ຈຳນວນເງິນ</p>
+                        <p class="text-3xl font-bold text-bcel-red">
+                            <span id="slip-amount">0.00</span> <span class="text-lg text-gray-400">LAK</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Preview Image (Small) -->
+                <div id="slip-img-preview-container" class="hidden bg-gray-50 p-2 border-t border-gray-100 text-center">
+                    <img id="slip-img-preview" src="" alt="Slip Preview"
+                        class="h-24 mx-auto object-contain opacity-50 hover:opacity-100 transition">
+                </div>
+            </div>
+
+            <!-- Add Form -->
+            <div class="bg-white p-6 rounded-xl card-shadow border border-gray-200">
+                <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="text-red-500">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span data-i18n="formTitle">
+                </h3>
+                <form id="addForm" class="space-y-3">
+                    <!-- Hidden Fields -->
+                    <input type="hidden" id="formId">
+                    <input type="hidden" id="formBill">
+                    <input type="hidden" id="formDate">
+                    <input type="hidden" id="formTime">
+                    <input type="hidden" id="formSender">
+                    <input type="hidden" id="formRecipient">
+                    <input type="hidden" id="formAccount">
+
+                    <div>
+                        <label for="inputDesc" class="block text-xs text-gray-500 mb-1" data-i18n="labelDetail">ລາຍລະອຽດ
+                            /
+                            ລາຍການ</label>
+                        <input type="text" id="inputDesc"
+                            class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-red-200 outline-none transition"
+                            placeholder="ຕົວຢ່າງ: ຄ່າກາເຟ..." required>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label for="inputCategory" class="block text-xs text-gray-500 mb-1"
+                                data-i18n="labelCategory">ໝວດໝູ່</label>
+                            <select id="inputCategory"
+                                class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-red-200 outline-none transition bg-white">
+                                <option value="ອາຫານ">ອາຫານ</option>
+                                <option value="ການເດີນທາງ">ການເດີນທາງ</option>
+                                <option value="ຊື້ເຄື່ອງ">ຊື້ເຄື່ອງ</option>
+                                <option value="ບິນ/ສາທາລະນຸປະໂພກ">ບິນ/ສາທາລະນຸປະໂພກ</option>
+                                <option value="ໂອນເງິນ/ຄອບຄົວ">ໂອນເງິນ/ຄອບຄົວ</option>
+                                <option value="ອື່ນໆ" selected>ອື່ນໆ</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="inputAmount" class="block text-xs text-gray-500 mb-1"
+                                data-i18n="labelInputAmount">ຈຳນວນເງິນ
+                                (LAK)</label>
+                            <input type="number" id="inputAmount" step="0.01"
+                                class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-red-200 outline-none transition font-mono"
+                                placeholder="0.00" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btnSubmit"
+                        class="w-full bg-gray-800 text-white py-2 rounded-lg hover:bg-black transition font-medium shadow-md active:scale-95 transform cursor-pointer flex justify-center items-center gap-2 mt-2">
+                        <span data-i18n="btnConfirm">ຢືນຢັນຂໍ້ມູນ</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Column 2 & 3: Analytics -->
+        <div class="md:col-span-2 space-y-6">
+
+            <!-- Filters -->
+            <div class="bg-white p-4 rounded-xl card-shadow border border-gray-100">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span data-i18n="filterTitle">ກອງຂໍ້ມູນ (Filter)</span>
+                    </h3>
+                    <button onclick="resetFilters()" class="text-xs text-red-500 hover:text-red-700 font-medium"
+                        data-i18n="btnReset">ລ້າງຂໍ້ມູນກອງ</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <!-- Date Start -->
+                    <div>
+                        <label for="filterStartDate" class="block text-xs text-gray-500 mb-1"
+                            data-i18n="labelStartDate">ວັນທີເລີ່ມຕົ້ນ</label>
+                        <input type="date" id="filterStartDate"
+                            class="w-full p-2 border rounded-lg text-sm bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-red-100">
+                    </div>
+                    <!-- Date End -->
+                    <div>
+                        <label for="filterEndDate" class="block text-xs text-gray-500 mb-1"
+                            data-i18n="labelEndDate">ວັນທີສິ້ນສຸດ</label>
+                        <input type="date" id="filterEndDate"
+                            class="w-full p-2 border rounded-lg text-sm bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-red-100">
+                    </div>
+                    <!-- Category -->
+                    <div>
+                        <label for="filterCategory" class="block text-xs text-gray-500 mb-1"
+                            data-i18n="labelCategory">ໝວດໝູ່</label>
+                        <select id="filterCategory"
+                            class="w-full p-2 border rounded-lg text-sm bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-red-100">
+                            <option value="all">ທຸກໝວດໝູ່</option>
+                            <option value="ອາຫານ">ອາຫານ</option>
+                            <option value="ການເດີນທາງ">ການເດີນທາງ</option>
+                            <option value="ຊື້ເຄື່ອງ">ຊື້ເຄື່ອງ</option>
+                            <option value="ບິນ/ສາທາລະນຸປະໂພກ">ບິນ/ສາທາລະນຸປະໂພກ</option>
+                            <option value="ຊື້ໝູ">ຊື້ໝູ</option>
+                            <option value="ຄ່າເຄື່ອງ">ຄ່າເຄື່ອງ</option>
+                            <option value="ອື່ນໆ">ອື່ນໆ</option>
+                        </select>
+                    </div>
+                    <!-- Search -->
+                    <div>
+                        <label for="filterSearch" class="block text-xs text-gray-500 mb-1"
+                            data-i18n="labelSearch">ຄົ້ນຫາ</label>
+                        <div class="relative">
+                            <input type="text" id="filterSearch" placeholder="ຊື່, ລາຍລະອຽດ..."
+                                class="w-full p-2 pl-8 border rounded-lg text-sm bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-red-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-2.5 top-2.5 text-gray-400"
+                                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div
+                    class="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-5 text-white card-shadow-lg card-shadow-hover">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-red-100 text-sm" data-i18n="statTotal">ຍອດລວມທັງໝົດ</p>
+                            <h2 class="text-2xl font-bold mt-1" id="totalAmount">0.00</h2>
+                            <p class="text-xs text-red-200 mt-2">ສະກຸນເງິນ LAK</p>
+                        </div>
+                        <div class="p-2 bg-white/20 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="12" y1="1" x2="12" y2="23" />
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl p-5 card-shadow card-shadow-hover border border-gray-100">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-gray-500 text-sm" data-i18n="statCount">ຈຳນວນລາຍການ</p>
+                            <h2 class="text-2xl font-bold text-gray-800 mt-1" id="totalCount">0</h2>
+                            <p class="text-xs text-green-500 mt-2 flex items-center">
+                                <span data-i18n="statStatus">ສະຖານະ:</span> <span id="syncText"
+                                    class="ml-1 text-gray-500">Local</span>
+                            </p>
+                        </div>
+                        <div class="p-2 bg-blue-50 text-blue-500 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 col-span-2 md:col-span-1">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-gray-500 text-sm" data-i18n="statTop">ໝວດໝູ່ສູງສຸດ</p>
+                            <h2 class="text-xl font-bold text-gray-800 mt-1" id="topCategory">-</h2>
+                            <p class="text-md text-purple-400 mt-2" id="topCategoryAmount">0.00 LAK</p>
+                        </div>
+                        <div class="p-2 bg-purple-50 text-purple-500 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                                <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="bg-white p-6 rounded-xl card-shadow border border-gray-100">
+                <h3 class="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="text-red-500">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                    <span data-i18n="chartTrend">
+                </h3>
+                <div class="w-full h-64">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl card-shadow border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-4 text-sm" data-i18n="chartPie">ສັດສ່ວນຕາມໝວດໝູ່</h3>
+                    <div class="w-full h-48 flex justify-center">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-gray-800 text-sm" data-i18n="chartHistory">ປະຫວັດລາຍການລ່າສຸດ</h3>
+                        <button onclick="loadFromGoogleSheet()" id="refreshBtn"
+                            class="text-xs text-blue-500 hover:underline flex items-center gap-1 hidden">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M23 4v6h-6" />
+                                <path d="M1 20v-6h6" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="space-y-3 overflow-y-auto max-h-48 pr-2 flex-1" id="transactionList">
+                        <!-- List -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Custom Modal Dialog -->
+    <div id="customModal"
+        class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
+        <div
+            class="bg-white rounded-2xl shadow-2xl p-6 w-11/12 max-w-sm text-center transform transition-all scale-100">
+            <div id="modalIcon" class="flex justify-center mb-4">
+                <!-- Icon Injected Here -->
+            </div>
+            <h3 id="modalTitle" class="text-xl font-bold text-gray-800 mb-2">Title</h3>
+            <p id="modalMessage" class="text-gray-600 mb-6 text-sm">Message content goes here.</p>
+            <button id="modalBtn" onclick="closeDialog()"
+                class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-md">
+                ເຂົ້າໃຈແລ້ວ
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Source of Truth (All Data)
+        let allTransactions = [];
+        // View (Filtered Data)
+        let currentTransactions = [];
+
+        let barChartInstance = null;
+        let pieChartInstance = null;
+
+        // --- Configuration ---
+        // Make sure this matches your deployed script if you want to hardcode it
+        const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbys6Ag-K7U_Trn1wat3iwxYRoeHD5yTYt6QRxZ8EYE3aYsb3yGibdJVm6v3qxReOZIclw/exec';
+
+        let GOOGLE_SCRIPT_URL = HARDCODED_URL;
+
+        const formatCurrency = (val) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(val);
+
+        // Format date from YYYY-MM-DD or ISO timestamp to DD/MM/YYYY
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '-';
+
+            // Extract date portion if it's an ISO timestamp (e.g., "2025-10-09T17:00:00.000Z")
+            let datePart = dateStr;
+            if (dateStr.includes('T')) {
+                datePart = dateStr.split('T')[0];
+            }
+
+            // Convert YYYY-MM-DD to DD/MM/YYYY
+            const parts = datePart.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+            }
+            return dateStr;
+        };
+
+        // --- Custom Dialog System ---
+        function showDialog(title, message, type = 'info') {
+            const modal = document.getElementById('customModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalMessage = document.getElementById('modalMessage');
+            const modalIcon = document.getElementById('modalIcon');
+            const modalBtn = document.getElementById('modalBtn');
+
+            modal.classList.remove('hidden');
+
+            // Set Content
+            modalTitle.textContent = title;
+            modalMessage.innerHTML = message.replaceAll('\n', '<br>'); // Support newlines
+
+            // Styles based on type
+            modalIcon.innerHTML = '';
+            if (type === 'error') {
+                modalIcon.innerHTML = '<svg class="text-red-500 w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                modalBtn.className = "w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition";
+            } else if (type === 'success') {
+                modalIcon.innerHTML = '<svg class="text-green-500 w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                modalBtn.className = "w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition";
+            } else {
+                modalIcon.innerHTML = '<svg class="text-blue-500 w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                modalBtn.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition";
+            }
+        }
+
+        function closeDialog() {
+            document.getElementById('customModal').classList.add('hidden');
+        }
+
+        function init() {
+            // Force use of Hardcoded URL
+            GOOGLE_SCRIPT_URL = HARDCODED_URL;
+
+            updateSyncStatus();
+            if (GOOGLE_SCRIPT_URL) {
+                loadFromGoogleSheet();
+            } else {
+                renderAll();
+                // Hide loader immediately if no URL
+                const globalLoader = document.getElementById('globalLoader');
+                if (globalLoader) globalLoader.classList.add('hidden');
+            }
+
+            // Set Initial Language (moved inside init)
+            setLanguage(currentLang);
+
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            // Add Form Submit
+            document.getElementById('addForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btnSubmit');
+
+                // Get form values
+                const desc = document.getElementById('inputDesc').value;
+                const amount = Number.parseFloat(document.getElementById('inputAmount').value);
+                const category = document.getElementById('inputCategory').value;
+
+                // Get hidden extracted values or defaults
+                const bill = document.getElementById('formBill').value || '-';
+                const date = document.getElementById('formDate').value || new Date().toISOString().split('T')[0];
+                const time = document.getElementById('formTime').value || new Date().toLocaleTimeString('en-GB');
+                const sender = document.getElementById('formSender').value || '-';
+                const recipient = document.getElementById('formRecipient').value || 'ບໍ່ລະບຸ';
+                const account = document.getElementById('formAccount').value || '-';
+
+                if (desc && amount) {
+                    btn.innerHTML = '<div class="loader w-5 h-5 border-2"></div>';
+                    btn.disabled = true;
+
+                    const newTrans = {
+                        id: Date.now().toString(),
+                        bill_number: bill,
+                        date: date,
+                        time: time,
+                        amount: amount,
+                        description: desc,
+                        category: category,
+                        recipient: recipient,
+                        account: account,
+                        sender_account: sender,
+                        currency: 'LAK'
+                    };
+
+                    // Update Data
+                    allTransactions.unshift(newTrans);
+
+                    // Re-apply filters to show new data if it matches
+                    applyFilters();
+
+                    // Sync to Cloud
+                    if (GOOGLE_SCRIPT_URL) {
+                        await saveToGoogleSheet(newTrans);
+                    }
+
+                    // Reset Form
+                    document.getElementById('addForm').reset();
+                    // Reset Hidden fields
+                    ['formBill', 'formDate', 'formTime', 'formSender', 'formRecipient', 'formAccount'].forEach(id => document.getElementById(id).value = '');
+
+                    btn.innerHTML = '<span>ຢືນຢັນຂໍ້ມູນ</span>';
+                    btn.disabled = false;
+
+                    // Reset Slip Preview to Default
+                    resetSlipView();
+                }
+            });
+
+            // Handle File Upload (Real OCR)
+            document.getElementById('fileInput').addEventListener('change', processSlipImage);
+
+
+            // Filter Event Listeners
+            document.getElementById('filterStartDate').addEventListener('change', applyFilters);
+            document.getElementById('filterEndDate').addEventListener('change', applyFilters);
+            document.getElementById('filterCategory').addEventListener('change', applyFilters);
+            document.getElementById('filterSearch').addEventListener('input', applyFilters);
+        }
+
+        // --- Filter Logic ---
+
+        function applyFilters() {
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const category = document.getElementById('filterCategory').value;
+            const searchTerm = document.getElementById('filterSearch').value.toLowerCase();
+
+            currentTransactions = allTransactions.filter(t => {
+                // Date Filter
+                if (startDate && t.date < startDate) return false;
+                if (endDate && t.date > endDate) return false;
+
+                // Category Filter
+                if (category !== 'all' && t.category !== category) return false;
+
+                // Search Filter
+                if (searchTerm) {
+                    const descMatch = (t.description || '').toLowerCase().includes(searchTerm);
+                    const recipientMatch = (t.recipient || '').toLowerCase().includes(searchTerm);
+                    const catMatch = (t.category || '').toLowerCase().includes(searchTerm);
+                    if (!descMatch && !recipientMatch && !catMatch) return false;
+                }
+
+                return true;
+            });
+
+            renderAll();
+        }
+
+        function resetFilters() {
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            document.getElementById('filterCategory').value = 'all';
+            document.getElementById('filterSearch').value = '';
+            applyFilters();
+        }
+
+        // --- OCR & Slip Logic ---
+
+        async function processSlipImage(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Show Scanning UI
+            const overlay = document.getElementById('scan-overlay');
+            const status = document.getElementById('scan-status');
+            overlay.classList.remove('hidden');
+            status.textContent = "ກຳລັງປະມວນຜົນຮູບພາບ...";
+
+            // Preview Image
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const img = document.getElementById('slip-img-preview');
+                img.src = event.target.result;
+                document.getElementById('slip-img-preview-container').classList.remove('hidden');
+            }
+            reader.readAsDataURL(file);
+
+            try {
+                // Run Tesseract
+                status.textContent = "ກຳລັງອ່ານຂໍ້ຄວາມ (OCR)...";
+                const worker = await Tesseract.createWorker('eng');
+                const ret = await worker.recognize(file);
+                const text = ret.data.text;
+                await worker.terminate();
+
+                console.log("OCR Result:", text);
+                status.textContent = "ກຳລັງວິເຄາະຂໍ້ມູນ...";
+
+                // Parse Data
+                const parsed = parseSlipData(text);
+
+                // Update UI with parsed data
+                updateSlipUI(parsed);
+                populateForm(parsed);
+
+            } catch (error) {
+                console.error("OCR Error:", error);
+                showDialog("OCR Error", "ບໍ່ສາມາດອ່ານຮູບພາບໄດ້. ກະລຸນາປ້ອນຂໍ້ມູນດ້ວຍຕົນເອງ.", 'error');
+            } finally {
+                overlay.classList.add('hidden');
+                e.target.value = ''; // Reset input
+            }
+        }
+
+        function parseSlipData(text) {
+            const lines = text.split('\n');
+            const fullText = text.replaceAll(/\s+/g, ' ');
+
+            const type = detectSlipType(fullText);
+
+            let data = {
+                type: type,
+                amount: extractAmount(fullText),
+                billNumber: extractBillNumber(fullText),
+                ...extractDateTime(fullText),
+                senderAccount: extractSenderAccount(fullText),
+                description: '',
+                recipientName: '-',
+                recipientAccount: '-'
+            };
+
+            if (type === 'ONEPAY') {
+                Object.assign(data, extractOnePayDetails(text, lines));
+            } else {
+                Object.assign(data, extractTransferDetails(lines));
+            }
+
+            // Fallback for description
+            if (!data.description) {
+                data.description = type === 'ONEPAY' ? 'ຊຳລະຄ່າສິນຄ້າ/ບໍລິການ' : 'ໂອນເງິນ';
+            }
+
+            return data;
+        }
+
+        function detectSlipType(fullText) {
+            if (fullText.includes("OnePay") || fullText.includes("Merchant") || fullText.includes("Reference")) {
+                return 'ONEPAY';
+            }
+            return 'TRANSFER';
+        }
+
+        function extractAmount(fullText) {
+            const amountMatch = fullText.match(/([\d,]+(\.\d{2})?)\s*LAK/i);
+            return amountMatch ? Number.parseFloat(amountMatch[1].replaceAll(',', '')) : 0;
+        }
+
+        function extractBillNumber(fullText) {
+            const billMatch = fullText.match(/\b(202\d{10,})\b/);
+            if (billMatch) return billMatch[1];
+
+            const labelMatch = fullText.match(/Bill number\s*(\d+)/i);
+            return labelMatch ? labelMatch[1] : '-';
+        }
+
+        function extractDateTime(fullText) {
+            const result = {
+                date: new Date().toISOString().split('T')[0],
+                time: ''
+            };
+
+            const dateMatch = fullText.match(/(\d{2}\/\d{2}\/\d{4})/);
+            const timeMatch = fullText.match(/(\d{2}:\d{2}(:\d{2})?)/);
+
+            if (dateMatch) {
+                const parts = dateMatch[1].split('/');
+                result.date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            if (timeMatch) result.time = timeMatch[1];
+
+            return result;
+        }
+
+        function extractSenderAccount(fullText) {
+            const accMatch = fullText.match(/Account\s+([0-9x-]+)/i);
+            return accMatch ? accMatch[1] : '-';
+        }
+
+        function extractOnePayDetails(text, lines) {
+            const details = { description: '', recipientName: 'OnePay Merchant' };
+
+            const refMatch = text.match(/Reference\s*\n?([A-Z0-9]+)/i);
+            if (refMatch) details.description = "Ref: " + refMatch[1];
+
+            const merchIndex = lines.findIndex(l => l.toLowerCase().includes('merchant'));
+            if (merchIndex !== -1 && lines[merchIndex + 1]) {
+                details.recipientName = lines[merchIndex + 1].trim();
+            }
+            return details;
+        }
+
+        function extractTransferDetails(lines) {
+            const details = { description: '', recipientName: '-', recipientAccount: '-' };
+
+            const descIndex = lines.findIndex(l => l.toLowerCase().includes('description'));
+            if (descIndex !== -1 && lines[descIndex + 1]) {
+                details.description = lines[descIndex + 1].trim();
+            }
+
+            const toIndex = lines.findIndex(l => l.toLowerCase().includes('to account'));
+            if (toIndex !== -1 && lines[toIndex + 1]) {
+                details.recipientName = lines[toIndex + 1].trim();
+                if (lines[toIndex + 2] && lines[toIndex + 2].match(/[\d-x]+/)) {
+                    details.recipientAccount = lines[toIndex + 2].trim();
+                }
+            }
+            return details;
+        }
+
+        function updateSlipUI(data) {
+            // Common Fields
+            document.getElementById('slip-amount').textContent = formatCurrency(data.amount);
+            document.getElementById('slip-bill').textContent = data.billNumber;
+            document.getElementById('slip-datetime').textContent = formatDate(data.date) + ' ' + (data.time || '');
+            document.getElementById('slip-top-value').textContent = data.senderAccount;
+
+            const header = document.getElementById('slip-header');
+            const iconContainer = document.getElementById('slip-icon-container');
+            const typeTitle = document.getElementById('slip-type-title');
+
+            if (data.type === 'ONEPAY') {
+                // ONEPAY STYLING
+                header.className = "bg-red-800 p-4 text-white text-center font-bold transition-colors duration-300"; // Darker red
+                typeTitle.textContent = "OnePay Payment";
+
+                document.getElementById('slip-top-label').textContent = "REF";
+                document.getElementById('slip-top-sub').textContent = "Reference";
+
+                iconContainer.textContent = "OP";
+                iconContainer.className = "w-12 h-12 rounded-full bg-red-800 text-white flex items-center justify-center font-bold text-xl shrink-0";
+
+                document.getElementById('slip-mid-label').textContent = "MER";
+                document.getElementById('slip-mid-sub').textContent = "Merchant";
+                document.getElementById('slip-mid-title').textContent = data.recipientName;
+                document.getElementById('slip-mid-detail').textContent = "ຮ້ານຄ້າ OnePay";
+
+                document.getElementById('slip-desc-label').textContent = "Reference";
+                document.getElementById('slip-desc-value').textContent = data.description.replace('Ref: ', '') || '-';
+
+            } else {
+                // TRANSFER STYLING
+                header.className = "bg-bcel-red p-4 text-white text-center font-bold transition-colors duration-300";
+                typeTitle.textContent = "Fund transfer sent";
+
+                document.getElementById('slip-top-label').textContent = "ຈາກ";
+                document.getElementById('slip-top-sub').textContent = "ບັນຊີ";
+
+                iconContainer.textContent = "TR";
+                iconContainer.className = "w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xl shrink-0";
+
+                document.getElementById('slip-mid-label').textContent = "ໄປຫາ";
+                document.getElementById('slip-mid-sub').textContent = "ບັນຊີ";
+                document.getElementById('slip-mid-title').textContent = data.recipientName;
+                document.getElementById('slip-mid-detail').textContent = data.recipientAccount;
+
+                document.getElementById('slip-desc-label').textContent = "ຄຳອະທິບາຍ";
+                document.getElementById('slip-desc-value').textContent = data.description;
+            }
+        }
+
+        function populateForm(data) {
+            document.getElementById('inputAmount').value = data.amount;
+            document.getElementById('inputDesc').value = data.description;
+
+            // Auto-categorize based on OCR text
+            const textLower = (data.description + data.recipientName).toLowerCase();
+            const catSelect = document.getElementById('inputCategory');
+
+            if (data.type === 'ONEPAY' || textLower.includes('food') || textLower.includes('cafe')) {
+                catSelect.value = 'ອາຫານ';
+            } else if (textLower.includes('mart') || textLower.includes('shop')) {
+                catSelect.value = 'ຊື້ເຄື່ອງ';
+            } else if (textLower.includes('bill') || textLower.includes('electric') || textLower.includes('water')) {
+                catSelect.value = 'ບິນ/ສາທາລະນຸປະໂພກ';
+            } else {
+                catSelect.value = 'ອື່ນໆ';
+            }
+
+            // Fill Hidden Fields
+            document.getElementById('formBill').value = data.billNumber;
+            document.getElementById('formDate').value = data.date;
+            document.getElementById('formTime').value = data.time;
+            document.getElementById('formSender').value = data.senderAccount;
+            document.getElementById('formRecipient').value = data.recipientName;
+            document.getElementById('formAccount').value = data.recipientAccount || data.senderAccount;
+        }
+
+        function resetSlipView() {
+            document.getElementById('slip-img-preview-container').classList.add('hidden');
+            document.getElementById('slip-img-preview').src = "";
+            document.getElementById('slip-type-title').textContent = "ພ້ອມສະແກນ";
+            document.getElementById('slip-amount').textContent = "0.00";
+            document.getElementById('slip-desc-value').textContent = "ລໍຖ້າການອັບໂຫລດ...";
+            document.getElementById('slip-mid-title').textContent = "-";
+        }
+
+        // --- Standard Logic (Render, CSV, etc.) ---
+
+
+
+
+
+        function saveDataCSV() {
+            // BACKUP uses ALL DATA, not just filtered
+            if (allTransactions.length === 0) {
+                showDialog("ບໍ່ມີຂໍ້ມູນ", "ບໍ່ມີຂໍ້ມູນທີ່ຈະບັນທຶກ.", 'warning');
+                return;
+            }
+            const headers = ["System ID", "Bill Number", "Date", "Time", "Description", "Category", "Amount", "Currency", "Sender Account", "Recipient Name", "Recipient Account"];
+            const csvRows = [headers.join(",")];
+            allTransactions.forEach(t => {
+                const row = [
+                    t.id || '-', t.bill_number || '-', t.date || '-', t.time || '-',
+                    `"${(t.description || '-').replaceAll('"', '""')}"`,
+                    t.category || '-', t.amount || 0, t.currency || 'LAK',
+                    t.sender_account || '-', t.recipient || '-', t.account || '-'
+                ];
+                csvRows.push(row.join(","));
+            });
+            const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "finance_backup.csv");
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        // --- Stats & Rendering ---
+
+        function renderAll() {
+            renderStats();
+            renderList();
+            renderCharts();
+        }
+
+        function renderStats() {
+            // Uses currentTransactions (Filtered Data)
+            const total = currentTransactions.reduce((sum, t) => sum + t.amount, 0);
+            document.getElementById('totalAmount').textContent = formatCurrency(total);
+            document.getElementById('totalCount').textContent = currentTransactions.length;
+
+            const groups = {};
+            currentTransactions.forEach(t => groups[t.category] = (groups[t.category] || 0) + t.amount);
+            const topCat = Object.keys(groups).sort((a, b) => groups[b] - groups[a])[0];
+
+            document.getElementById('topCategory').textContent = topCat || '-';
+            document.getElementById('topCategoryAmount').textContent = topCat ? formatCurrency(groups[topCat]) + ' LAK' : '0.00 LAK';
+        }
+
+        function renderList() {
+            const listEl = document.getElementById('transactionList');
+            listEl.innerHTML = '';
+
+            if (currentTransactions.length === 0) {
+                listEl.innerHTML = '<div class="text-center text-gray-400 py-4 text-sm">ບໍ່ພົບລາຍການ</div>';
+                return;
+            }
+
+            // Show top 20 of filtered results to prevent UI lag if list is huge
+            const displayLimit = currentTransactions.slice(0, 50);
+
+            displayLimit.forEach(t => {
+                const isOnePay = t.recipient && (t.recipient.toLowerCase().includes('merchant') || t.recipient === 'OnePay Merchant');
+                const iconColor = isOnePay ? 'text-red-800 bg-red-100' : 'text-blue-600 bg-blue-100';
+
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg transition border-b border-gray-50 last:border-0 cursor-pointer';
+                item.onclick = () => showDialog("ລາຍລະອຽດ", `ໄປຫາ: ${t.recipient}\nເລກບິນ: ${t.bill_number}`, 'info');
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="${iconColor} p-2 rounded-full shrink-0">
+                            ${isOnePay
+                        ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>'
+                        : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+                    }
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-gray-800 truncate">${t.description}</p>
+                            <div class="flex gap-2 items-center">
+                                <span class="text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">${t.category}</span>
+                                <p class="text-xs text-gray-400 truncate">${formatDate(t.date)}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="font-bold text-sm text-gray-700 whitespace-nowrap">-${formatCurrency(t.amount)}</span>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function renderCharts() {
+            // Uses currentTransactions (Filtered Data)
+            const sorted = [...currentTransactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const dates = [...new Set(sorted.map(t => t.date))]; // Unique dates
+            const amountsByDate = dates.map(d => sorted.filter(t => t.date === d).reduce((s, t) => s + t.amount, 0));
+
+            const categories = {};
+            currentTransactions.forEach(t => categories[t.category] = (categories[t.category] || 0) + t.amount);
+
+            // Bar Chart
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: dates.length ? dates.map(d => formatDate(d)) : ['ບໍ່ມີຂໍ້ມູນ'],
+                    datasets: [{
+                        label: 'ຍອດໃຊ້ຈ່າຍ (LAK)',
+                        data: amountsByDate.length ? amountsByDate : [0],
+                        backgroundColor: '#d32f2f',
+                        borderRadius: 4,
+                        barThickness: 20
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f3f4f6' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // Pie Chart
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            if (pieChartInstance) pieChartInstance.destroy();
+
+            const pieData = Object.keys(categories).length ? Object.values(categories) : [1];
+            const pieColors = ['#d32f2f', '#10B981', '#F59E0B', '#3B82F6', '#6366F1', '#8B5CF6'];
+
+            pieChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(categories).length ? Object.keys(categories) : ['ຫວ່າງເປົ່າ'],
+                    datasets: [{
+                        data: pieData,
+                        backgroundColor: pieColors,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        // --- Language & Translations ---
+        let currentLang = localStorage.getItem('appLang') || 'lo';
+
+        const translations = {
+            // Header
+            'appTitle': { lo: 'ແດຊບອດການໃຊ້ຈ່າຍງານແຕ່ງດອງ', en: 'Finance Dashboard Wedding' },
+            'appSubtitle': { lo: 'ລະບົບວິເຄາະສະລິບ BCEL One', en: 'BCEL One Slip Analysis System' },
+            'btnCsv': { lo: 'ໂຫຼດ CSV', en: 'Load CSV' },
+            'btnBackup': { lo: 'ສຳຮອງຂໍ້ມູນ', en: 'Backup Data' },
+            'btnUpload': { lo: 'ອັບໂຫລດສະລິບ', en: 'Upload Slip' },
+
+            // Global Loader
+            'loadingText': { lo: 'ກຳລັງໂຫຼດຂໍ້ມູນ...', en: 'Loading data...' },
+            'connectingText': { lo: 'Connecting to Google Sheets', en: 'Connecting to Google Sheets' },
+
+            // Slip Card
+            'slipScanText': { lo: 'ກຳລັງອ່ານຂໍ້ມູນສະລິບ...', en: 'Scanning slip data...' },
+            'ocrStatus': { lo: 'ກຳລັງເລີ່ມລະບົບ OCR...', en: 'Starting OCR system...' },
+            'slipTitleTransfer': { lo: 'ໃບບິນການໂອນເງິນ', en: 'Fund transfer sent' },
+            'slipTitleReady': { lo: 'ພ້ອມສະແກນ', en: 'Ready to Scan' },
+            'labelFrom': { lo: 'ຈາກ', en: 'From' },
+            'labelTo': { lo: 'ໄປຫາ', en: 'To' },
+            'labelAccount': { lo: 'ບັນຊີ', en: 'Account' },
+            'labelDesc': { lo: 'ຄຳອະທິບາຍ', en: 'Description' },
+            'valWait': { lo: 'ລໍຖ້າການອັບໂຫລດ...', en: 'Waiting for upload...' },
+            'labelBill': { lo: 'ເລກທີໃບບິນ', en: 'Bill Number' },
+            'labelAmount': { lo: 'ຈຳນວນເງິນ', en: 'Amount' },
+
+            // Form
+            'formTitle': { lo: 'ບັນທຶກລາຍການ', en: 'Record Transaction' },
+            'labelDetail': { lo: 'ລາຍລະອຽດ / ລາຍການ', en: 'Detail / Item' },
+            'labelCategory': { lo: 'ໝວດໝູ່', en: 'Category' },
+            'labelInputAmount': { lo: 'ຈຳນວນເງິນ (LAK)', en: 'Amount (LAK)' },
+            'btnConfirm': { lo: 'ຢືນຢັນຂໍ້ມູນ', en: 'Confirm Data' },
+
+            // Filters
+            'filterTitle': { lo: 'ຄົ້ນຫາຂໍ້ມູນ (Filter)', en: 'Filter Data' },
+            'btnReset': { lo: 'ລົບລ້າງຂໍ້ມູນ', en: 'Reset Filters' },
+            'labelStartDate': { lo: 'ວັນທີເລີ່ມຕົ້ນ', en: 'Start Date' },
+            'labelEndDate': { lo: 'ວັນທີສິ້ນສຸດ', en: 'End Date' },
+            'labelSearch': { lo: 'ຄົ້ນຫາ', en: 'Search' },
+            'optAll': { lo: 'ທຸກໝວດໝູ່', en: 'All Categories' },
+
+            // Categories
+            'catFood': { lo: 'ອາຫານ', en: 'Food' },
+            'catTravel': { lo: 'ການເດີນທາງ', en: 'Travel' },
+            'catShopping': { lo: 'ຊື້ເຄື່ອງ', en: 'Shopping' },
+            'catBills': { lo: 'ບິນ/ສາທາລະນຸປະໂພກ', en: 'Bills/Utilities' },
+            'catTransfer': { lo: 'ໂອນເງິນ/ຄອບຄົວ', en: 'Transfer/Family' },
+            'catOther': { lo: 'ອື່ນໆ', en: 'Other' },
+
+            // Stats
+            'statTotal': { lo: 'ຍອດລວມທັງໝົດ', en: 'Total Amount' },
+            'statCount': { lo: 'ຈຳນວນລາຍການ', en: 'Total Transactions' },
+            'statStatus': { lo: 'ສະຖານະ:', en: 'Status:' },
+            'statTop': { lo: 'ໝວດໝູ່ສູງສຸດ', en: 'Top Category' },
+            'statConnected': { lo: 'ເຊື່ອມຕໍ່ແລ້ວ', en: 'Connected' },
+
+            // Charts
+            'chartTrend': { lo: 'ທ່າອ່ຽງການໂອນເງິນ (ປະຈຳວັນ)', en: 'Spending Trend (Daily)' },
+            'chartPie': { lo: 'ສັດສ່ວນຕາມໝວດໝູ່', en: 'Category Distribution' },
+            'chartHistory': { lo: 'ປະຫວັດລາຍການລ່າສຸດ', en: 'Recent Transactions' },
+            'msgNoData': { lo: 'ບໍ່ພົບລາຍການ', en: 'No transactions found' }
+        };
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('appLang', lang);
+
+            // Update Text Elements
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.dataset.i18n;
+                if (translations[key]) {
+                    el.textContent = translations[key][lang];
+                }
+            });
+
+            // Update Placeholders
+            document.getElementById('inputDesc').placeholder = lang === 'lo' ? 'ຕົວຢ່າງ: ຄ່າກາເຟ...' : 'Ex: Coffee...';
+            document.getElementById('filterSearch').placeholder = lang === 'lo' ? 'ຊື່, ລາຍລະອຽດ...' : 'Name, description...';
+
+            // Update Dropdown Options (Category)
+            const catSelect = document.getElementById('inputCategory');
+            const filterCatSelect = document.getElementById('filterCategory');
+
+            // Map values to display text
+            const catMap = {
+                'ອາຫານ': translations['catFood'][lang],
+                'ການເດີນທາງ': translations['catTravel'][lang],
+                'ຊື້ເຄື່ອງ': translations['catShopping'][lang],
+                'ບິນ/ສາທາລະນຸປະໂພກ': translations['catBills'][lang],
+                'ໂອນເງິນ/ຄອບຄົວ': translations['catTransfer'][lang],
+                'ອື່ນໆ': translations['catOther'][lang]
+            };
+
+            // Update Select Options Display Text (keep values same)
+            [catSelect, filterCatSelect].forEach(select => {
+                Array.from(select.options).forEach(opt => {
+                    // Special case for 'all' in filter
+                    if (opt.value === 'all') {
+                        opt.text = translations['optAll'][lang];
+                    } else if (catMap[opt.value]) {
+                        opt.text = catMap[opt.value];
+                    }
+                });
+            });
+
+            // Update Charts
+            if (barChartInstance) {
+                barChartInstance.data.datasets[0].label = lang === 'lo' ? 'ຍອດໃຊ້ຈ່າຍ (LAK)' : 'Amount (LAK)';
+                barChartInstance.update();
+            }
+
+            // Update UI Button State
+            document.getElementById('btnLangLo').className = lang === 'lo' ? 'font-bold text-yellow-300' : 'text-white/70 hover:text-white';
+            document.getElementById('btnLangEn').className = lang === 'en' ? 'font-bold text-yellow-300' : 'text-white/70 hover:text-white';
+        }
+
+
+        function updateSyncStatus() {
+            const badge = document.getElementById('syncStatusBadge');
+            const text = document.getElementById('syncText');
+            const refreshBtn = document.getElementById('refreshBtn');
+
+            if (GOOGLE_SCRIPT_URL) {
+                badge.classList.remove('hidden');
+
+                // Extract Script ID for display (e.g. AKfy...)
+                const match = GOOGLE_SCRIPT_URL.match(/\/s\/([a-zA-Z0-9-_]+)\/exec/);
+                const scriptId = match ? match[1].substring(0, 5) + "..." : "Link";
+
+                text.innerHTML = `Google Sheets <span class="text-[10px] opacity-75">(${scriptId})</span>`;
+                text.classList.add('text-green-600');
+                badge.classList.remove('bg-gray-200', 'text-gray-500');
+                badge.classList.add('bg-green-100', 'text-green-700');
+
+                refreshBtn.classList.remove('hidden');
+            } else {
+                badge.classList.remove('hidden'); // Always show badge so user can click
+                text.textContent = 'No Cloud Connection';
+                text.classList.remove('text-green-600');
+                badge.classList.remove('bg-green-100', 'text-green-700');
+                badge.classList.add('bg-gray-200', 'text-gray-500');
+
+                refreshBtn.classList.add('hidden');
+            }
+
+
+            // Badge is static now
+            badge.style.cursor = 'default';
+            badge.onclick = null;
+        }
+
+        async function saveToGoogleSheet(data) {
+            try {
+                // UI Feedback
+                const statusText = document.getElementById('syncText');
+                if (statusText) statusText.textContent = 'Syncing...';
+
+                // Send as text/plain to avoid CORS preflight (OPTIONS) which GAS doesn't like
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) throw new Error('Network response was not ok');
+
+                // Try parse result
+                const result = await response.json();
+
+                // Version Check
+                if (!result.version || result.version < '2.1') {
+                    showDialog("⚠️ Script ເກົ່າເກີນໄປ",
+                        "ກະລຸນາອັບເດດ Google Apps Script ຂອງທ່ານ!\n\n1. ກັອບປີ້ໂຄ້ດໃໝ່ຈາກຄູ່ມື\n2. ໄປທີ່ Deploy > Manage deployments\n3. Edit > **New Version** > Deploy",
+                        'error');
+                    return;
+                }
+
+                if (result.result !== 'success') throw new Error(result.error || 'Script Error');
+
+                console.log("Saved to Cloud:", result);
+                if (statusText) {
+                    statusText.textContent = 'Saved';
+                    setTimeout(() => statusText.textContent = 'Google Sheets', 2000);
+                }
+
+                // DEBUG: Show user where it went
+                showDialog("ບັນທຶກສຳເລັດ!", `Spreadsheet: ${result.spreadsheetName}\nSheet: ${result.sheetName}\nRow: ${result.rowAdded}`, 'success');
+
+            } catch (error) {
+                console.error("Sheet Save Error:", error);
+                const statusText = document.getElementById('syncText');
+                if (statusText) statusText.textContent = 'Save Failed';
+                showDialog("ບັນທຶກບໍ່ສຳເລັດ", "ບໍ່ສາມາດບັນທຶກຂໍ້ມູນລົງ Google Sheet ໄດ້.\nກະລຸນາກວດສອບ URL ຫຼື ການເຊື່ອມຕໍ່ອິນເຕີເນັດ.", 'error');
+            }
+        }
+
+        async function loadFromGoogleSheet() {
+            if (!GOOGLE_SCRIPT_URL) return;
+
+            const listEl = document.getElementById('transactionList');
+            const refreshBtn = document.getElementById('refreshBtn');
+            // Store original icon
+            const originalIcon = refreshBtn.innerHTML;
+
+            try {
+                // Loading State
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<div class="loader w-3 h-3 border-2 border-blue-500"></div> Loading...';
+                listEl.innerHTML = '<div class="text-center py-8 text-gray-400 flex flex-col items-center"><div class="loader border-gray-400 mb-2"></div>ກຳລັງໂຫຼດຂໍ້ມູນ...</div>';
+
+                // Add timestamp to prevent caching
+                const nocache = Date.now();
+                const response = await fetch(`${GOOGLE_SCRIPT_URL}?nocache=${nocache}`);
+                if (!response.ok) throw new Error("Network response was not ok");
+
+                const data = await response.json();
+
+                // Check if data is actually an error object
+                if (data.error) throw new Error(data.error);
+
+                if (Array.isArray(data)) {
+                    // Check if empty
+                    if (data.length === 0) {
+                        console.log("Sheet is empty");
+                    }
+
+                    allTransactions = data.map(item => ({
+                        ...item,
+                        // Ensure amount is number
+                        amount: Number.parseFloat(item.amount) || 0
+                    })).reverse(); // Show newest first
+
+                    applyFilters(); // Re-render everything
+                    console.log(`Loaded ${allTransactions.length} transactions from cloud.`);
+                }
+            } catch (error) {
+                console.error("Load Error:", error);
+
+                listEl.innerHTML = `
+                    <div class="text-center py-6 text-red-500 bg-red-50 rounded-lg mx-2">
+                        <p class="font-bold text-sm mb-1">ເກີດຂໍ້ຜິດພາດໃນການໂຫຼດ</p>
+                        <p class="text-xs mb-3 text-red-400">ກວດສອບ URL ຫຼື ການເຊື່ອມຕໍ່</p>
+                        <button onclick="loadFromGoogleSheet()" class="bg-white border border-red-200 text-red-500 px-3 py-1 rounded-full text-xs hover:bg-red-50 transition shadow-sm">
+                            ລອງໃໝ່
+                        </button>
+                    </div>`;
+            } finally {
+                // Restore Button
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = originalIcon;
+
+                // Hide Global Loader
+                const globalLoader = document.getElementById('globalLoader');
+                if (globalLoader) {
+                    globalLoader.style.opacity = '0';
+                    setTimeout(() => globalLoader.classList.add('hidden'), 500);
+                }
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
